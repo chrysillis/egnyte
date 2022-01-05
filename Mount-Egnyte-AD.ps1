@@ -10,7 +10,7 @@ Give it a CSV file with all of the drive mappings and group names and it will ha
 .Notes
 Author: Chrysillis Collier
 Email: ccollier@micromenders.com
-Date: 09-10-2021
+Date: 01/04/2022
 #>
 
 
@@ -19,7 +19,7 @@ $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 #Defines script name.
 $App = "Egnyte Drive Mapping"
 #States the current version of this script
-$Version = "v5.1.7"
+$Version = "v5.1.8"
 #Today's date and time
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination for application logs
@@ -42,7 +42,7 @@ function Start-Egnyte {
         $egnytesync = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnytesyncservice.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
         if (!$egnyteclient -or !$egnytedrive -or !$egnytesync) {
             Write-Host "$(Get-Date): Starting $app before mapping drives..."
-            Start-Process -PassThru -FilePath $default -ArgumentList $arguments
+            Start-Process -PassThru -FilePath $default -ArgumentList $arguments | Out-Null
             Start-Sleep -Seconds 8
             $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
             if ($egnyteclient) {
@@ -115,6 +115,7 @@ function Test-Paths {
     Checks group membership before mapping each drive to ensure end user has appropriate permissions.
     Tests the paths first so as to not waste time re-mapping drives that are already mapped.
     Checks whether the path is mapped to a local server versus Egnyte. If mapped to local, then removes the mapping and remaps it to Egnyte.
+    Also checks if drive is disconnected and if it is, will unmap it and then remap it to Egnyte.
     #>
     [CmdletBinding(DefaultParameterSetName = "DriveList")]
     param (
@@ -129,7 +130,8 @@ function Test-Paths {
             $GroupMember = ([adsisearcher]"samaccountname=$($env:USERNAME)").FindOne().Properties.memberof -replace '^CN=([^,]+).+$', '$1'
             foreach ($Drive in $DriveList) {
                 $CheckMembers = $GroupMember -contains $Drive.GroupName
-                if (Test-Path -Path "$($Drive.DriveLetter):") {
+                $DiscDrives = Get-CimInstance -Class Win32_NetworkConnection | Where-Object {$_.ConnectionState -eq "Disconnected" }
+                if ((Test-Path -Path "$($Drive.DriveLetter):") -Or ($DiscDrives)) {
                     $Root = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq $Drive.DriveLetter }  
                     if (!$Root) {
                         Write-host "$(Get-Date): $($Drive.DriveName) is not mapped to the cloud. Unmapping now."
@@ -158,12 +160,9 @@ function Test-Paths {
     }
 }
 #Checks if the log path exists and if not, creates it.
-if (Test-Path C:\Logs) {
-    Write-Host "$(Get-Date): Using existing log folder."
-}
-else {
-    Write-Host "$(Get-Date): Creating new log folder."
-    New-Item -Path C:\Logs -ItemType Directory | Out-Null
+if (-Not (Test-Path -Path "C:\Logs")) {
+    Write-Host -Message "Creating new log folder."
+    New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
 }
 #Begins the logging process to capture all output.
 Start-Transcript -Path $LogFilePath -Force
