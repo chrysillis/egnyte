@@ -1,0 +1,5 @@
+DrivePath,DriveName,DriveLetter,GroupName
+\\jensen-fs1\deploy,Deploy,I,Domain Admins
+\\jensen-fs1\office,Office,O,Domain Admins
+\\jensen-fs1\data,Projects,P,Domain Admins
+\\jensen-fs1\scan,Scans,S,Domain Admins

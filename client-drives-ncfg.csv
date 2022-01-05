@@ -1,0 +1,11 @@
+DrivePath,DriveName,DriveLetter,DomainName
+/Shared/Audit,Audit,G,ncfinancialgroup
+/Shared/Bookkeeping,Bookkeeping,H,ncfinancialgroup
+/Shared/Corporation Documents,Corporation Documents,I,ncfinancialgroup
+/Shared/Insurance,Insurance,J,ncfinancialgroup
+/Shared/Investments,Investments,K,ncfinancialgroup
+/Shared/NCFG,NCFG,L,ncfinancialgroup
+/Shared/Payroll,Payroll,M,ncfinancialgroup
+/Shared/Real Estate,Real Estate,N,ncfinancialgroup
+/Shared/Taxes,Taxes,O,ncfinancialgroup
+/Private,Private,Z,ncfinancialgroup

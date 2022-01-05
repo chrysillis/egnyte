@@ -1,0 +1,9 @@
+DrivePath,DriveName,DriveLetter,DomainName,GroupName
+/Shared/Accounting,Accounting,N,bcaarchitects,BCA_ACCOUNTING
+/Shared/Accounting2,Accounting2,V,bcaarchitects,BCA_ACCOUNTING
+/Shared/Corporate,Corporate,R,bcaarchitects,BCA_CORPORATE
+/Shared/Front Desk Forms,Front Desk,F,bcaarchitects,BCA_FRONTDESK
+/Shared/Marketing,Marketing,M,bcaarchitects,BCA_MARKETING
+/Shared/Operations,Operations,O,bcaarchitects,BCA_OPERATIONS
+/Shared/Projects,Projects,P,bcaarchitects,BCA_PROJECTS
+/Shared/Timecard,Timecard,T,bcaarchitects,BCA_SHARES
