@@ -19,11 +19,11 @@ $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 #Defines script name.
 $App = "Egnyte Drive Mapping"
 #States the current version of this script
-$Version = "v5.1.8"
+$Version = "v5.1.9"
 #Today's date and time
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination for application logs
-$LogFilePath = "C:\Logs\" + $Date + "" + "-" + $env:USERNAME + "-Egnyte-Mount-Logs.log"
+$LogFilePath = "C:\Logs\Egnyte\" + $Date + "" + "-" + $env:USERNAME + "-Mount-Logs.log"
 #Grabs the current domain name of the AD domain.
 $Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
 #Path to the drive mapping file.
@@ -163,6 +163,10 @@ function Test-Paths {
 if (-Not (Test-Path -Path "C:\Logs")) {
     Write-Host -Message "Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
+}
+if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
+    Write-Host -Message "Creating new log folder."
+    New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
 #Begins the logging process to capture all output.
 Start-Transcript -Path $LogFilePath -Force
