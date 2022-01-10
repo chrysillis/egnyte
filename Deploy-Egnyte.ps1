@@ -17,12 +17,12 @@ Email: ccollier@micromenders.com
 #Defines global variables needed for installing the app
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 $App = "Egnyte Desktop App"
-$ScriptVersion = "v5.1.6"
+$ScriptVersion = "v5.1.7"
 $Registry = Get-ItemProperty HKLM:\Software\WOW6432Node\Egnyte\* -ErrorAction SilentlyContinue | Select-Object setup.msi.version.product
 $Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
 $File = "\\" + $domain + "\sysvol\" + "\$domain\scripts\Mount-Egnyte-AD.ps1"
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
-$LogFilePath = "C:\Logs\" + $date + "-Egnyte-Install-Logs.log"
+$LogFilePath = "C:\Logs\Egnyte\" + $date + "-Install-Logs.log"
 
 function Get-EgnyteUrl {
     <#
@@ -214,8 +214,12 @@ function Update-Egnyte {
     }
 }
 if (-Not (Test-Path -Path "C:\Logs")) {
-    Write-Verbose -Message "Creating new log folder."
+    Write-Host -Message "Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
+}
+if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
+    Write-Host -Message "Creating new log folder."
+    New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
 Start-Transcript -Path $logfilepath -Force
 Write-Host "$(Get-Date): Successfully started $app install script $ScriptVersion on $env:computername"
