@@ -17,7 +17,7 @@ Email: ccollier@micromenders.com
 #Defines global variables needed for installing the app
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 $App = "Egnyte Desktop App"
-$ScriptVersion = "v5.1.7"
+$ScriptVersion = "v5.1.8"
 $Registry = Get-ItemProperty HKLM:\Software\WOW6432Node\Egnyte\* -ErrorAction SilentlyContinue | Select-Object setup.msi.version.product
 $Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
 $File = "\\" + $domain + "\sysvol\" + "\$domain\scripts\Mount-Egnyte-AD.ps1"
@@ -81,16 +81,23 @@ function New-PSTask {
     )
     process {
         try {
-            $TaskDetails = @{
-                Action      = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $Path
-                Trigger     = New-ScheduledTaskTrigger -AtLogOn
-                Principal   = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\Interactive"
-                Settings    = New-ScheduledTaskSettingsSet -DontStopOnIdleEnd -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances Parallel
-                TaskName    = "Map Network Drives"
-                Description = "Maps network drives through the Egnyte Desktop App."
+            $Task = Get-ScheduledTask -TaskName "Map Network Drives"
+            if ($Task) {
+                Write-Host "Task already exists, starting now."
+                Start-ScheduledTask -TaskName "Map Network Drives"    
             }
-            Register-ScheduledTask @TaskDetails -Force
-            Start-ScheduledTask -TaskName "Map Network Drives"
+            else {
+                $TaskDetails = @{
+                    Action      = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $Path
+                    Trigger     = New-ScheduledTaskTrigger -Once -At 1am
+                    Principal   = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\Interactive"
+                    Settings    = New-ScheduledTaskSettingsSet -DontStopOnIdleEnd -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances Parallel
+                    TaskName    = "Map Network Drives"
+                    Description = "Maps network drives through the Egnyte Desktop App."
+                }
+                Register-ScheduledTask @TaskDetails -Force
+                Start-ScheduledTask -TaskName "Map Network Drives"
+            }
         }
         catch {
             Throw "There was an unrecoverable error: $($_.Exception.Message). Could not create the task."
