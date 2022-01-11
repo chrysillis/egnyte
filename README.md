@@ -1,4 +1,2 @@
-# egnyte
-Egnyte Scripts
-
-This is a collection of scripts for fully automating Egnyte deployments.
+# Egnyte Scripts
+Deploys the Egnyte desktop client and maps Egnyte drives.
