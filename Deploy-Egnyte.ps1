@@ -1,28 +1,49 @@
-#Requires -Version 5.1
-#Requires -RunAsAdministrator
 <#
 .Synopsis
-Installs the Egnyte Desktop App.
+    Install Egnyte Desktop Client.
+
 .Description
-This script deploys the Egnyte Desktop App if it isn't installed or updates it if it is out of date.
-It parses the website to automatically download the latest version of the software, always staying up to date.
+    Deploys the Egnyte Desktop Client if it isn't installed or updates it if it is out of date.
+    It parses the website to automatically download the latest version of the software, always staying up to date.
+    After handling the Egnyte client, it then creates a scheduled task to launch another script to handle mapping the drives.
+
 .Example
-.\Deploy-Egnyte.ps1
+    .\Deploy-Egnyte.ps1
+
+.Outputs
+    Log files stored in C:\Logs\Egnyte.
+
 .Notes
-Author: Chrysillis Collier
-Email: ccollier@micromenders.com
+    Author: Chrysi
+    Link:   https://github.com/DarkSylph/egnyte
+    Date:   01/12/2022
 #>
 
+#---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
-#Defines global variables needed for installing the app
-$Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
+#Requires -Version 5.1
+#Requires -RunAsAdministrator
+
+#----------------------------------------------------------[Declarations]----------------------------------------------------------
+
+#Script Version
+$ScriptVersion = "v5.1.9"
+#Script Name
 $App = "Egnyte Desktop App"
-$ScriptVersion = "v5.1.8"
+#Application Installation Path
+$Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
+#Application Registry Version
 $Registry = Get-ItemProperty HKLM:\Software\WOW6432Node\Egnyte\* -ErrorAction SilentlyContinue | Select-Object setup.msi.version.product
+#Finds The Current Active Directory Domain
 $Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
+#Location Of The Mapping Script
 $File = "\\" + $domain + "\sysvol\" + "\$domain\scripts\Mount-Egnyte-AD.ps1"
+#Today's Date
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
+#Destination to store logs
 $LogFilePath = "C:\Logs\Egnyte\" + $date + "-Install-Logs.log"
+
+#-----------------------------------------------------------[Functions]------------------------------------------------------------
 
 function Get-EgnyteUrl {
     <#
@@ -220,6 +241,8 @@ function Update-Egnyte {
         exit
     }
 }
+#-----------------------------------------------------------[Execution]------------------------------------------------------------
+
 if (-Not (Test-Path -Path "C:\Logs")) {
     Write-Host -Message "Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
