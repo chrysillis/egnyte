@@ -26,19 +26,19 @@
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
-#Script Version
-$ScriptVersion = "v5.1.9"
-#Script Name
+#Script version
+$ScriptVersion = "v5.2.0"
+#Script name
 $App = "Egnyte Desktop App"
-#Application Installation Path
+#Application installation path
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
-#Application Registry Version
+#Application registry version
 $Registry = Get-ItemProperty HKLM:\Software\WOW6432Node\Egnyte\* -ErrorAction SilentlyContinue | Select-Object setup.msi.version.product
-#Finds The Current Active Directory Domain
+#Finds the current Active Directory domain
 $Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
-#Location Of The Mapping Script
+#Location of the mapping script
 $File = "\\" + $domain + "\sysvol\" + "\$domain\scripts\Mount-Egnyte-AD.ps1"
-#Today's Date
+#Today's date
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination to store logs
 $LogFilePath = "C:\Logs\Egnyte\" + $date + "-Install-Logs.log"
@@ -81,7 +81,7 @@ function Get-EgnyteUrl {
             }
         }
         Catch {
-            Throw "There was an unrecoverable error: $($_.Exception.Message). Cannot display results."
+            Throw "Cannot display results: $($_.Exception.Message)"
         }
         Return $websiteObject
     }
@@ -121,11 +121,7 @@ function New-PSTask {
             }
         }
         catch {
-            Throw "There was an unrecoverable error: $($_.Exception.Message). Could not create the task."
-        }
-        finally {
-            Stop-Transcript
-            exit
+            Throw "Could not create the task: $($_.Exception.Message)"
         }
     }
 }
@@ -241,8 +237,10 @@ function Update-Egnyte {
         exit
     }
 }
+
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
+#Sets up a destination for the logs
 if (-Not (Test-Path -Path "C:\Logs")) {
     Write-Host -Message "Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
@@ -251,6 +249,7 @@ if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
     Write-Host -Message "Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
+#Begins the logging process to capture all output
 Start-Transcript -Path $logfilepath -Force
 Write-Host "$(Get-Date): Successfully started $app install script $ScriptVersion on $env:computername"
 Write-Host "$(Get-Date): Checking to see if $app is already installed..."
@@ -268,3 +267,7 @@ if (Test-Path $default) {
 }
 Write-Host "$(Get-Date): $app was not found, installing now..."
 Install-Egnyte
+#Ends the logging process
+Stop-Transcript
+#Terminates the script
+exit

@@ -1,34 +1,45 @@
-#Requires -Version 5.1
 <#
 .Synopsis
-Mounts Egnyte network drives.
+    Mounts Egnyte network drives.
+
 .Description
-This script mounts Egnyte network drives based on group membership in Active Directory.
-Give it a CSV file with all of the drive mappings and group names and it will handle the rest.
+    This script mounts Egnyte network drives based on group membership in Active Directory.
+    Utilizes a CSV file with all of the drive mappings and group names located in the SYSVOL directory.
+
 .Example
-.\Mount-Egnyte-AD.ps1 without administrator rights.
+    .\Mount-Egnyte-AD.ps1 without administrator rights.
+
+.Outputs
+    Log files stored in C:\Logs\Egnyte.
+
 .Notes
-Author: Chrysillis Collier
-Email: ccollier@micromenders.com
-Date: 01/04/2022
+    Author: Chrysi
+    Link:   https://github.com/DarkSylph/egnyte
+    Date:   01/12/2022
 #>
 
+#---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
-#Defines path to application.
-$Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
-#Defines script name.
+#Requires -Version 5.1
+
+#----------------------------------------------------------[Declarations]----------------------------------------------------------
+
+#Script version
+$ScriptVersion = "v5.2.0"
+#Script name
 $App = "Egnyte Drive Mapping"
-#States the current version of this script
-$Version = "v5.1.9"
-#Today's date and time
-$Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
-#Destination for application logs
-$LogFilePath = "C:\Logs\Egnyte\" + $Date + "" + "-" + $env:USERNAME + "-Mount-Logs.log"
-#Grabs the current domain name of the AD domain.
+#Application installation path
+$Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
+#Finds the current Active Directory domain
 $Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
-#Path to the drive mapping file.
+#Location of the mappings
 $File = "\\" + $Domain + "\sysvol\" + "\$Domain\scripts\client-drives.csv"
+#Today's date
+$Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
+#Destination to store logs
+$LogFilePath = "C:\Logs\Egnyte\" + $Date + "" + "-" + $env:USERNAME + "-Mount-Logs.log"
 
+#-----------------------------------------------------------[Functions]------------------------------------------------------------
 
 function Start-Egnyte {
     <#
@@ -54,7 +65,7 @@ function Start-Egnyte {
         }
     }
     catch {
-        Write-Host "$(Get-Date): There was an error: $($_.Exception.Message) Unable to confirm if $app is running or not, attempting to start $app by force."
+        Write-Host "$(Get-Date): Unable to confirm if $app is running or not, attempting to start $app by force: $($_.Exception.Message)"
         Start-Process -PassThru -FilePath $default -ArgumentList $arguments
         Start-Sleep -Seconds 8
         $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
@@ -103,7 +114,7 @@ function Mount-Drives {
             }
         }
         catch {
-            Throw "There was an unrecoverable error: $($_.Exception.Message) Unable to map or connect drives."
+            Throw "Unable to map or connect drives: $($_.Exception.Message)"
         }
     }
 }
@@ -155,11 +166,14 @@ function Test-Paths {
             Start-Sleep -Seconds 2
         }
         catch {
-            Throw "There was an unrecoverable error: $($_.Exception.Message)"
+            Throw "Could not map drives: $($_.Exception.Message)"
         }
     }
 }
-#Checks if the log path exists and if not, creates it.
+
+#-----------------------------------------------------------[Execution]------------------------------------------------------------
+
+#Sets up a destination for the logs
 if (-Not (Test-Path -Path "C:\Logs")) {
     Write-Host -Message "Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
@@ -168,17 +182,17 @@ if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
     Write-Host -Message "Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
-#Begins the logging process to capture all output.
+#Begins the logging process to capture all output
 Start-Transcript -Path $LogFilePath -Force
-Write-Host "$(Get-Date): Successfully started $App $Version on $env:computername"
+Write-Host "$(Get-Date): Successfully started $App $ScriptVersion on $env:computername"
 Write-Host "$(Get-Date): Checking if Egnyte is running before continuing..."
-#Starts Egnyte up if it isn't already running.
+#Starts Egnyte up if it isn't already running
 Start-Egnyte
-#Imports the mapping file into the script.
+#Imports the mapping file into the script
 $Drives = Import-Csv -Path $File
-#Tests the paths to see if they are already mapped or not and maps them if needed.
+#Tests the paths to see if they are already mapped or not and maps them if needed
 Test-Paths -DriveList $Drives
-#Ends the logging process.
+#Ends the logging process
 Stop-Transcript
-#Terminates the script.
+#Terminates the script
 exit
