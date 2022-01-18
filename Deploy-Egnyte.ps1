@@ -27,7 +27,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.0"
+$ScriptVersion = "v5.2.1"
 #Script name
 $App = "Egnyte Desktop App"
 #Application installation path
@@ -49,24 +49,7 @@ function Get-EgnyteUrl {
     <#
     .Synopsis
     Grabs the latest Egnyte download URL and outputs it into a readable format.
-    .Parameter URL
-    Outputs the Egnyte download URL.
-    .Parameter Version
-    Parses the version number of the software from the URL.
     #>
-    [CmdletBinding(DefaultParameterSetName = "URL")]
-    [OutputType([String], ParameterSetName = "URL")]
-    [OutputType([String], ParameterSetName = "Version")]
-    param (
-        [Parameter(Mandatory = $false, ValueFromPipeline = $true, ParameterSetName = "URL")]
-        [ValidateNotNullOrEmpty()]
-        [String]
-        $URL
-        ,
-        [Parameter(Mandatory = $false, ParameterSetName = "Version")]
-        [String]
-        $Version
-    )
     process {
         Try {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -110,7 +93,6 @@ function New-PSTask {
             else {
                 $TaskDetails = @{
                     Action      = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $Path
-                    Trigger     = New-ScheduledTaskTrigger -Once -At 1am
                     Principal   = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\Interactive"
                     Settings    = New-ScheduledTaskSettingsSet -DontStopOnIdleEnd -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances Parallel
                     TaskName    = "Map Network Drives"
