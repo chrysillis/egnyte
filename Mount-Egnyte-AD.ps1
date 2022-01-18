@@ -25,7 +25,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.0"
+$ScriptVersion = "v5.2.1"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
