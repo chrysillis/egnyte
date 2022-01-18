@@ -1,36 +1,95 @@
-#Requires -Version 5.1
 <#
 .Synopsis
-Mounts Egnyte network drives.
+    Mounts Egnyte network drives.
+
 .Description
-This script mounts Egnyte network drives based on group membership in Azure Active Directory.
-Feed it a CSV file with all of the drive mappings and it will handle the rest.
+    This script mounts Egnyte network drives based on group membership in Azure Active Directory.
+    Utilizes a CSV file with all of the drive mappings and group names located in an Azure Storage Account.
+
 .Example
-.\Mount-Egnyte-AD.ps1 without administrator rights.
+    .\Mount-Egnyte-Intune.ps1 without administrator rights.
+
+.Outputs
+    Log files stored in C:\Logs\Egnyte.
+
 .Notes
-Author: Chrysillis Collier
-Email: ccollier@micromenders.com
+    Author: Chrysi
+    Link:   https://github.com/DarkSylph/egnyte
+    Date:   01/18/2022
 #>
 
+#---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
-#Defines global variables for installing the app
-$default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
-$app = "Egnyte Desktop App"
-$version = "v5.1.5"
-$date = Get-Date -Format "MM-dd-yyyy"
-$logfilepath = "C:\temp\Egnyte Logs\" + $date + "" + "-" + $env:USERNAME + "-Egnyte-Mount-Logs.log"
+#Requires -Version 5.1
 
-function Get-Mapping {
+#----------------------------------------------------------[Declarations]----------------------------------------------------------
+
+#Script version
+$ScriptVersion = "v5.2.1"
+#Script name
+$App = "Egnyte Drive Mapping"
+#Application installation path
+$Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
+#Location of the mappings
+$File = "https://contoso.blob.core.windows.net/egnyte/client-drives.csv"
+#Today's date
+$Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
+#Destination to store logs
+$LogFilePath = "C:\Logs\Egnyte\" + $Date + "" + "-" + $env:USERNAME + "-Mount-Logs.log"
+#Defines the data needed to connect to the Microsoft Graph API
+$AppID = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+$AppSecret = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+$Scope = "https://graph.microsoft.com/.default"
+$TenantName = "contoso.onmicrosoft.com"
+$GraphURL = "https://login.microsoftonline.com/$TenantName/oauth2/v2.0/token"
+
+#-----------------------------------------------------------[Functions]------------------------------------------------------------
+
+function Start-Egnyte {
+    <#
+    .Synopsis
+    Starts Egnyte if any of its processes aren't running.
+    #>
+    $arguments = '--auto-silent'
+    try {
+        $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
+        $egnytedrive = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnytedrive.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
+        $egnytesync = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnytesyncservice.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
+        if (!$egnyteclient -or !$egnytedrive -or !$egnytesync) {
+            Write-Host "$(Get-Date): Starting $app before mapping drives..."
+            Start-Process -PassThru -FilePath $default -ArgumentList $arguments | Out-Null
+            Start-Sleep -Seconds 8
+            $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
+            if ($egnyteclient) {
+                Write-Host "$(Get-Date): $app has successfully started up!"
+            }
+        }
+        else {
+            Write-Host "$(Get-Date): $app is already running, proceeding to map drives."
+        }
+    }
+    catch {
+        Write-Host "$(Get-Date): Unable to confirm if $app is running or not, attempting to start $app by force: $($_.Exception.Message)"
+        Start-Process -PassThru -FilePath $default -ArgumentList $arguments
+        Start-Sleep -Seconds 8
+        $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
+        if ($egnyteclient) {
+            Write-Host "$(Get-Date): $app has successfully started up!"
+        }
+        else {
+            Write-Host "$(Get-Date): Status of $app is unknown, proceeding with rest of script..."
+        }
+    }
+}
+function Get-Mappings {
     <#
     .Synopsis
     Downloads the mapping file.
     .Parameter URL
     Input the URL to the mapping file. Must be publicly accessible.
     #>
-    [CmdletBinding(DefaultParameterSetName = "URL")]
-    [OutputType([String], ParameterSetName = "URL")]
     param (
-        [Parameter(Mandatory = $false, ValueFromPipeline = $true, ParameterSetName = "URL")]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [ValidateNotNullOrEmpty()]
         [String]
         $URL
@@ -38,8 +97,8 @@ function Get-Mapping {
     process {
         try {
             if (-Not (Test-Path -Path "C:\Deploy")) {
-                Write-Verbose -Message "Creating new directory."
-                New-Item -ItemType Directory -Force -Path C:\Deploy
+                Write-Host -Message "Creating new log folder."
+                New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
             }
             $outpath = "C:\Deploy\client-drives.csv"
             Write-Host "$(Get-Date): Downloading files to $outpath..."
@@ -56,36 +115,29 @@ function Get-Mapping {
             }        
         }
         catch {
-            Throw "There was an unrecoverable error: $($_.Exception.Message). Unable to download mapping file."
+            Throw "Unable to download mapping file: $($_.Exception.Message)"
         }
     }
 }
 function Get-Groups {
-    #Define data to connect to Microsoft Graph API
-    $AppID = '556e5c74-4c46-4922-9743-d8e6931a3c2d'
-    $AppSecret = 'Ef9Ed9DUX48yrc_~msDPm~Vg0bI_4YnL7.'
-    $Scope = "https://graph.microsoft.com/.default"
-    $TenantName = "AmericanInfrastructureFunds.onmicrosoft.com"
-    $GraphURL = "https://login.microsoftonline.com/$TenantName/oauth2/v2.0/token"
-
     #Add System.Web for urlencode
     Add-Type -AssemblyName System.Web
 
     #Create body
     $Body = @{
-        client_id = $AppId
-	    client_secret = $AppSecret
-	    scope = $Scope
-	    grant_type = 'client_credentials'
+        client_id     = $AppId
+        client_secret = $AppSecret
+        scope         = $Scope
+        grant_type    = 'client_credentials'
     }
 
     #Splat the parameters for Invoke-Restmethod for cleaner code
     $PostSplat = @{
         ContentType = 'application/x-www-form-urlencoded'
-        Method = 'POST'
+        Method      = 'POST'
         #Create string by joining bodylist with '&'
-        Body = $Body
-        Uri = $GraphUrl
+        Body        = $Body
+        Uri         = $GraphUrl
     }
 
     #Request the token!
@@ -95,7 +147,7 @@ function Get-Groups {
     #Create header
     $Header = @{
         'Authorization' = "$($Request.token_type) $($Request.access_token)"
-        'Content-Type' = "application/json"
+        'Content-Type'  = "application/json"
     }
     #Define user ID to check for group memberships
     $userID = whoami.exe /upn
@@ -115,42 +167,6 @@ function Get-Groups {
     Write-Host "$(Get-Date): Grabbing list of group memberships..."
     $GroupMemberRequest = Invoke-RestMethod -Uri $Uri -Headers $Header -Method 'Post' -Body $Payload
     $GroupMemberRequest.Value
-}
-function Start-Egnyte {
-    <#
-    .Synopsis
-    Starts Egnyte if any of its processes aren't running.
-    #>
-    $arguments = '--auto-silent'
-    try {
-        $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
-        $egnytedrive = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnytedrive.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
-        $egnytesync = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnytesyncservice.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
-        if (!$egnyteclient -or !$egnytedrive -or !$egnytesync) {
-            Write-Host "$(Get-Date): Starting $app before mapping drives..."
-            Start-Process -PassThru -FilePath $default -ArgumentList $arguments
-            Start-Sleep -Seconds 8
-            $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
-            if ($egnyteclient) {
-                Write-Host "$(Get-Date): $app has successfully started up!"
-            }
-        }
-        else {
-            Write-Host "$(Get-Date): $app is already running, proceeding to map drives."
-        }
-    }
-    catch {
-        Write-Host "$(Get-Date): There was an error: $($_.Exception.Message). Unable to confirm if $app is running or not, attempting to start $app by force."
-        Start-Process -PassThru -FilePath $default -ArgumentList $arguments
-        Start-Sleep -Seconds 8
-        $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
-        if ($egnyteclient) {
-            Write-Host "$(Get-Date): $app has successfully started up!"
-        }
-        else {
-            Write-Host "$(Get-Date): Status of $app is unknown, proceeding with rest of script..."
-        }
-    }
 }
 function Mount-Drives {
     <#
@@ -173,9 +189,9 @@ function Mount-Drives {
                 $arguments = @(
                     "-command add"
                     "-l ""$($Drive.DriveName)"""
-                    "-d $($Drive.DomainName)"
+                    "-d ""$($Drive.DomainName)"""
                     "-sso use_sso"
-                    "-t $($Drive.DriveLetter)"
+                    "-t ""$($Drive.DriveLetter)"""
                     "-m ""$($Drive.DrivePath)"""
                 )
                 $process = Start-Process -PassThru -FilePath $default -ArgumentList $arguments
@@ -189,7 +205,7 @@ function Mount-Drives {
             }
         }
         catch {
-            Throw "There was an unrecoverable error: $($_.Exception.Message). Unable to map or connect drives."
+            Throw "Unable to map or connect drives: $($_.Exception.Message)"
         }
     }
 }
@@ -200,6 +216,8 @@ function Test-Paths {
     .Description
     Checks group membership before mapping each drive to ensure end user has appropriate permissions.
     Tests the paths first so as to not waste time re-mapping drives that are already mapped.
+    Checks whether the path is mapped to a local server versus Egnyte. If mapped to local, then removes the mapping and remaps it to Egnyte.
+    Also checks if drive is disconnected and if it is, will unmap it and then remap it to Egnyte.
     #>
     [CmdletBinding(DefaultParameterSetName = "DriveList")]
     param (
@@ -210,14 +228,12 @@ function Test-Paths {
     )
     process {
         try {
-            Write-Host "$(Get-Date): Successfully started $app mounting script $version on $env:computername"
-            Write-Host "$(Get-Date): Checking if $app is running before continuing..."
-            Start-Egnyte
             Write-Host "$(Get-Date): Checking to see if the paths are already mapped..."
             $GroupMember = Get-Groups
             foreach ($Drive in $DriveList) {
                 $CheckMembers = $GroupMember -contains $Drive.GroupID
-                if (Test-Path -Path "$($Drive.DriveLetter):") {
+                $DiscDrives = Get-CimInstance -Class Win32_NetworkConnection | Where-Object { $_.ConnectionState -eq "Disconnected" }
+                if ((Test-Path -Path "$($Drive.DriveLetter):") -Or ($DiscDrives)) {
                     $Root = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq $Drive.DriveLetter }  
                     if (!$Root) {
                         Write-host "$(Get-Date): $($Drive.DriveName) is not mapped to the cloud. Unmapping now."
@@ -241,16 +257,34 @@ function Test-Paths {
             Start-Sleep -Seconds 2
         }
         catch {
-            Throw "There was an unrecoverable error: $($_.Exception.Message). Unable to connect to AD to check membership."
-        }
-        finally {
-            Remove-Item "C:\Deploy" -Force -Recurse
-            Stop-Transcript
-            exit
+            Throw "Could not map drives: $($_.Exception.Message)"
         }
     }
 }
-Start-Transcript -Path $logfilepath -Force
-Get-Mapping -URL "https://aimlp.blob.core.windows.net/egnyte/client-drives.csv"
+
+#-----------------------------------------------------------[Execution]------------------------------------------------------------
+
+#Sets up a destination for the logs
+if (-Not (Test-Path -Path "C:\Logs")) {
+    Write-Host -Message "Creating new log folder."
+    New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
+}
+if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
+    Write-Host -Message "Creating new log folder."
+    New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
+}
+#Begins the logging process to capture all output
+Start-Transcript -Path $LogFilePath -Force
+Write-Host "$(Get-Date): Successfully started $App $ScriptVersion on $env:computername"
+Write-Host "$(Get-Date): Checking if Egnyte is running before continuing..."
+#Starts Egnyte up if it isn't already running
+Start-Egnyte
+#Imports the mapping file into the script
+Get-Mappings -URL $File
 $Drives = Import-Csv -Path "C:\Deploy\client-drives.csv"
+#Tests the paths to see if they are already mapped or not and maps them if needed
 Test-Paths -DriveList $Drives
+#Ends the logging process
+Stop-Transcript
+#Terminates the script
+exit
