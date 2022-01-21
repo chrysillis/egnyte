@@ -25,7 +25,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.1"
+$ScriptVersion = "v5.2.2"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
@@ -118,6 +118,37 @@ function Mount-Drives {
         }
     }
 }
+function Remove-Drives {
+    <#
+    .Synopsis
+    Removes drives that are not authorized.
+    .Parameter DriveList
+    Accepts an array of drives and then feeds them into Egnyte to be removed.
+    #>
+    [CmdletBinding(DefaultParameterSetName = "DriveList")]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "DriveList")]
+        [ValidateNotNullOrEmpty()]
+        [PSCustomObject[]]
+        $DriveList
+    )
+    process {
+        try {
+            foreach ($Drive in $DriveList) {
+                Write-Host "$(Get-Date): Not authorized, removing $($Drive.DriveName) drive." -ForegroundColor Magenta
+                $arguments = @(
+                    "-command remove"
+                    "-l ""$($Drive.DriveName)"""
+                )
+                $process = Start-Process -PassThru -FilePath $default -ArgumentList $arguments
+                $process.WaitForExit()
+            }
+        }
+        catch {
+            Throw "Unable to remove drives: $($_.Exception.Message)"
+        }
+    }
+}
 function Test-Paths {
     <#
     .Synopsis
@@ -141,17 +172,19 @@ function Test-Paths {
             $GroupMember = ([adsisearcher]"samaccountname=$($env:USERNAME)").FindOne().Properties.memberof -replace '^CN=([^,]+).+$', '$1'
             foreach ($Drive in $DriveList) {
                 $CheckMembers = $GroupMember -contains $Drive.GroupName
-                $DiscDrives = Get-CimInstance -Class Win32_NetworkConnection | Where-Object {$_.ConnectionState -eq "Disconnected" }
+                $DiscDrives = Get-CimInstance -Class Win32_NetworkConnection | Where-Object { $_.ConnectionState -eq "Disconnected" }
                 if ((Test-Path -Path "$($Drive.DriveLetter):") -Or ($DiscDrives)) {
                     $Root = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq $Drive.DriveLetter }  
                     if (!$Root) {
                         Write-host "$(Get-Date): $($Drive.DriveName) is not mapped to the cloud. Unmapping now."
                         $NetDrive = $($Drive.DriveLetter) + ":"
                         net use $NetDrive /delete
-                        Mount-Drives -DriveList $Drive
                     }
                     else {
                         Write-Host "$(Get-Date): $($Drive.DriveName) is already mapped..."
+                        if (!$CheckMembers) {
+                            Remove-Drives -DriveList $Drive
+                        }
                     }
                 }
                 elseif ($CheckMembers) {
@@ -159,7 +192,7 @@ function Test-Paths {
                     Mount-Drives -DriveList $Drive
                 }
                 else {
-                    Write-Host "$(Get-Date): Not authorized for this drive, moving to next drive..."    
+                    Write-Host "$(Get-Date): Not authorized for this drive, moving to next drive..."
                 }
             }
             Write-Host "$(Get-Date): All drives checked on $env:computername, proceeding to exit script..."
@@ -175,11 +208,11 @@ function Test-Paths {
 
 #Sets up a destination for the logs
 if (-Not (Test-Path -Path "C:\Logs")) {
-    Write-Host -Message "Creating new log folder."
+    Write-Host "$(Get-Date): Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
 }
 if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
-    Write-Host -Message "Creating new log folder."
+    Write-Host "$(Get-Date): Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
 #Begins the logging process to capture all output
