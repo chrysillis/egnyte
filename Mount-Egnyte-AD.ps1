@@ -25,15 +25,13 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.3"
+$ScriptVersion = "v5.2.4"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
-#Finds the current Active Directory domain
-$Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
 #Location of the mappings
-$File = "\\" + $Domain + "\sysvol\" + "\$Domain\scripts\client-drives.csv"
+$File = "C:\Deploy\Egnyte\client-drives.csv"
 #Today's date
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination to store logs
