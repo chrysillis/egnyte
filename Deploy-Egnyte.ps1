@@ -22,22 +22,19 @@
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
 #Requires -Version 5.1
-#Requires -RunAsAdministrator
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.2"
+$ScriptVersion = "v5.2.3"
 #Script name
 $App = "Egnyte Desktop App"
 #Application installation path
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 #Application registry version
 $Registry = Get-ItemProperty HKLM:\Software\WOW6432Node\Egnyte\* -ErrorAction SilentlyContinue | Select-Object setup.msi.version.product
-#Finds the current Active Directory domain
-$Domain = [System.Directoryservices.ActiveDirectory.Domain]::GetCurrentDomain() | ForEach-Object { $_.Name }
 #Location of the mapping script
-$File = "\\" + $domain + "\sysvol\" + "\$domain\scripts\Mount-Egnyte-AD.ps1"
+$File = "C:\Deploy\Egnyte\Mount-Drives.ps1"
 #Today's date
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination to store logs
@@ -93,17 +90,22 @@ function New-PSTask {
                 Write-Host "$(Get-Date): Task already exists, removing now."
                 Unregister-ScheduledTask -TaskName "Map Network Drives" -Confirm:$false
             }
+            $Task = Get-ScheduledTask -TaskName "Turbo Mapped Drives" -ErrorAction SilentlyContinue
+            if ($Task) {
+                Write-Host "$(Get-Date): Task already exists, removing now."
+                Unregister-ScheduledTask -TaskName "Turbo Mapped Drives" -Confirm:$false
+            }
             Write-Host "$(Get-Date): Creating new scheduled task."
             $TaskDetails = @{
                 Action      = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument "-WindowStyle hidden $($Path)"
                 Principal   = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\Interactive"
-                Trigger     = New-ScheduledTaskTrigger -AtLogOn -RandomDelay 15
                 Settings    = New-ScheduledTaskSettingsSet -DontStopOnIdleEnd -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances Parallel
                 TaskName    = "Map Network Drives"
                 Description = "Maps network drives through the Egnyte Desktop App."
             }
             Register-ScheduledTask @TaskDetails -Force
-            Write-Host "$(Get-Date): Finished registering task. Terminating this script."         
+            Write-Host "$(Get-Date): Finished registering task. Starting task now."
+            Start-ScheduledTask -TaskName "Map Network Drives"
             Stop-Transcript
             exit
         }
@@ -229,28 +231,20 @@ if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
 #Begins the logging process to capture all output
 Start-Transcript -Path $logfilepath -Force
 Write-Host "$(Get-Date): Successfully started $app $ScriptVersion on $env:computername"
-if (-Not (Test-Path -Path "C:\Deploy")) {
-    Write-Verbose "$(Get-Date): Creating new Deploy directory."
-    New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
-}
-if (-Not (Test-Path -Path "C:\Deploy\Egnyte")) {
-    Write-Verbose "$(Get-Date): Creating new Egnyte directory."
-    New-Item -ItemType Directory -Force -Path C:\Deploy\Egnyte | Out-Null
-}
 Write-Host "$(Get-Date): Checking to see if $app is already installed..."
 if (Test-Path $Default) {
     Write-Host "$(Get-Date): $app is already installed, checking version..."
     $Download = Get-EgnyteUrl
     if ($registry.'setup.msi.version.product' -ge $Download.version) {
         Write-Host "$(Get-Date): $app is already up to date!"
-        New-PSTask -File $File
+        New-PSTask -Path $File
     }
     else {
         Write-Host "$(Get-Date): Version $($registry.'setup.msi.version.product') was found, proceeding to update to $($Download.Version)"
         Update-Egnyte
-        New-PSTask -File $File
+        New-PSTask -Path $File
     }
 }
 Write-Host "$(Get-Date): $app was not found, installing now..."
 Install-Egnyte
-New-PSTask -File $File
+New-PSTask -Path $File
