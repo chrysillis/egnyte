@@ -27,7 +27,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.1"
+$ScriptVersion = "v5.2.2"
 #Script name
 $App = "Egnyte Desktop App"
 #Application installation path
@@ -52,6 +52,9 @@ function Get-EgnyteUrl {
     #>
     process {
         Try {
+            $keyPath = 'Registry::HKLM\Software\Policies\Microsoft\Internet Explorer\Main'
+            if (-Not (Test-Path $keyPath)) { New-Item $keyPath -Force | Out-Null }
+            New-ItemProperty -Path $keyPath -Name "DisableFirstRunCustomize" -Value 1 -Force | Out-Null
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             $URL = (Invoke-WebRequest -UseBasicParsing -Uri "https://helpdesk.egnyte.com/hc/en-us/articles/205237150").Links.Href | Select-String -Pattern '.msi'
             $Version = $URL.ToString()
@@ -85,22 +88,24 @@ function New-PSTask {
     )
     process {
         try {
-            $Task = Get-ScheduledTask -TaskName "Map Network Drives"
+            $Task = Get-ScheduledTask -TaskName "Map Network Drives" -ErrorAction SilentlyContinue
             if ($Task) {
-                Write-Host "Task already exists, starting now."
-                Start-ScheduledTask -TaskName "Map Network Drives"    
+                Write-Host "$(Get-Date): Task already exists, removing now."
+                Unregister-ScheduledTask -TaskName "Map Network Drives" -Confirm:$false
             }
-            else {
-                $TaskDetails = @{
-                    Action      = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $Path
-                    Principal   = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\Interactive"
-                    Settings    = New-ScheduledTaskSettingsSet -DontStopOnIdleEnd -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances Parallel
-                    TaskName    = "Map Network Drives"
-                    Description = "Maps network drives through the Egnyte Desktop App."
-                }
-                Register-ScheduledTask @TaskDetails -Force
-                Start-ScheduledTask -TaskName "Map Network Drives"
+            Write-Host "$(Get-Date): Creating new scheduled task."
+            $TaskDetails = @{
+                Action      = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument "-WindowStyle hidden $($Path)"
+                Principal   = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\Interactive"
+                Trigger     = New-ScheduledTaskTrigger -AtLogOn -RandomDelay 15
+                Settings    = New-ScheduledTaskSettingsSet -DontStopOnIdleEnd -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances Parallel
+                TaskName    = "Map Network Drives"
+                Description = "Maps network drives through the Egnyte Desktop App."
             }
+            Register-ScheduledTask @TaskDetails -Force
+            Write-Host "$(Get-Date): Finished registering task. Terminating this script."         
+            Stop-Transcript
+            exit
         }
         catch {
             Throw "Could not create the task: $($_.Exception.Message)"
@@ -117,11 +122,7 @@ function Install-Egnyte {
     Inputs the file path to the Egnyte drive mapping script for the client.
     #>
     $Download = Get-EgnyteUrl
-    if (-Not (Test-Path -Path "C:\Deploy")) {
-        Write-Verbose -Message "Creating new deploy folder."
-        New-Item -ItemType Directory -Force -Path C:\Deploy
-    }
-    $outpath = "C:\Deploy\EgnyteDesktopApp.msi"
+    $outpath = "C:\Deploy\Egnyte\EgnyteDesktopApp.msi"
     Write-Host "$(Get-Date): Downloading files to $outpath..."
     $job = Measure-Command { (New-Object System.Net.WebClient).DownloadFile($Download.URL, $outpath) }
     $jobtime = $job.TotalSeconds
@@ -131,7 +132,7 @@ function Install-Egnyte {
     }
     else {
         Write-Host "$(Get-Date): Download failed, please check your connection and try again..." -ForegroundColor Red
-        Remove-Item "C:\Deploy" -Force -Recurse
+        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
     Write-Host "$(Get-Date): Updating firewall rules for $app..."
@@ -158,18 +159,17 @@ function Install-Egnyte {
     $firewallstatus = New-NetFirewallRule @firewallrule2
     Write-Host $firewallstatus.status
     Write-Verbose -Message "Starting install process..."
-    $arguments = '/i C:\Deploy\EgnyteDesktopApp.msi ED_SILENT=1 /passive'
+    $arguments = '/i C:\Deploy\Egnyte\EgnyteDesktopApp.msi ED_SILENT=1 /passive'
     $process = Start-Process -PassThru -FilePath msiexec -Verb RunAs -ArgumentList $arguments
     $process.WaitForExit()
     Start-Sleep -Seconds 5
     if (Test-Path $default) {
         Write-Host "$(Get-Date): $app installed successfully on $env:computername! Proceeding to map drives..." -ForegroundColor Green
-        Remove-Item "C:\Deploy" -Force -Recurse
-        New-PSTask -Path $File
+        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
     }
     else {
         Write-Host "$(Get-Date): $app failed to install on $env:computername. Please try again. Cleaning up downloaded files..." -ForegroundColor Red
-        Remove-Item "C:\Deploy" -Force -Recurse
+        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
 }
@@ -181,11 +181,7 @@ function Update-Egnyte {
     Uninstalls the previous version of Egnyte before installing the new version to ensure the new version installs successfully.
     #>
     $Download = Get-EgnyteUrl
-    if (-Not (Test-Path -Path "C:\Deploy")) {
-        Write-Verbose -Message "Creating new directory."
-        New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
-    }
-    $outpath = "C:\Deploy\EgnyteDesktopApp.msi"
+    $outpath = "C:\Deploy\Egnyte\EgnyteDesktopApp.msi"
     Write-Host "$(Get-Date): Downloading files to $outpath..."
     $job = Measure-Command { (New-Object System.Net.WebClient).DownloadFile($Download.URL, $outpath) }
     $jobtime = $job.TotalSeconds
@@ -195,27 +191,26 @@ function Update-Egnyte {
     }
     else {
         Write-Host "$(Get-Date): Download failed, please check your connection and try again..." -ForegroundColor Red
-        Remove-Item "C:\Deploy" -Force -Recurse
+        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
-    $arguments2 = '/x C:\Deploy\EgnyteDesktopApp.msi /passive'
+    $arguments2 = '/x C:\Deploy\Egnyte\EgnyteDesktopApp.msi /passive'
     Write-Verbose -Message "Uninstalling previous version now."
     $process = Start-Process -PassThru -FilePath msiexec -Verb RunAs -ArgumentList $arguments2
     $process.WaitForExit()
     Start-Sleep -Seconds 5
     Write-Verbose -Message "Starting install process for new version."
-    $arguments = '/i C:\Deploy\EgnyteDesktopApp.msi ED_SILENT=1 /passive'
+    $arguments = '/i C:\Deploy\Egnyte\EgnyteDesktopApp.msi ED_SILENT=1 /passive'
     $process = Start-Process -PassThru -FilePath msiexec -Verb RunAs -ArgumentList $arguments
     $process.WaitForExit()
     Start-Sleep -Seconds 5
     if ($registry.'setup.msi.version.product' -eq $Download.version) {
         Write-Host "$(Get-Date): $app installed successfully on $env:computername! Proceeding to map drives..." -ForegroundColor Green
-        Remove-Item "C:\Deploy" -Force -Recurse
-        New-PSTask -File $File
+        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
     }
     else {
         Write-Host "$(Get-Date): $app failed to install on $env:computername. Please try again. Cleaning up downloaded files..." -ForegroundColor Red
-        Remove-Item "C:\Deploy" -Force -Recurse
+        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
 }
@@ -224,32 +219,38 @@ function Update-Egnyte {
 
 #Sets up a destination for the logs
 if (-Not (Test-Path -Path "C:\Logs")) {
-    Write-Host -Message "Creating new log folder."
+    Write-Host "$(Get-Date): Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
 }
 if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
-    Write-Host -Message "Creating new log folder."
+    Write-Host "$(Get-Date): Creating new Egnyte log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
 #Begins the logging process to capture all output
 Start-Transcript -Path $logfilepath -Force
-Write-Host "$(Get-Date): Successfully started $app install script $ScriptVersion on $env:computername"
+Write-Host "$(Get-Date): Successfully started $app $ScriptVersion on $env:computername"
+if (-Not (Test-Path -Path "C:\Deploy")) {
+    Write-Verbose "$(Get-Date): Creating new Deploy directory."
+    New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
+}
+if (-Not (Test-Path -Path "C:\Deploy\Egnyte")) {
+    Write-Verbose "$(Get-Date): Creating new Egnyte directory."
+    New-Item -ItemType Directory -Force -Path C:\Deploy\Egnyte | Out-Null
+}
 Write-Host "$(Get-Date): Checking to see if $app is already installed..."
-if (Test-Path $default) {
+if (Test-Path $Default) {
     Write-Host "$(Get-Date): $app is already installed, checking version..."
     $Download = Get-EgnyteUrl
     if ($registry.'setup.msi.version.product' -ge $Download.version) {
-        Write-Host "$(Get-Date): $app is already up to date! Proceeding to map drives..."
-        New-PSTask -Path $File
+        Write-Host "$(Get-Date): $app is already up to date!"
+        New-PSTask -File $File
     }
     else {
         Write-Host "$(Get-Date): Version $($registry.'setup.msi.version.product') was found, proceeding to update to $($Download.Version)"
         Update-Egnyte
+        New-PSTask -File $File
     }
 }
 Write-Host "$(Get-Date): $app was not found, installing now..."
 Install-Egnyte
-#Ends the logging process
-Stop-Transcript
-#Terminates the script
-exit
+New-PSTask -File $File
