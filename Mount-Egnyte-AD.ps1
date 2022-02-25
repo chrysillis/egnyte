@@ -25,7 +25,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.2"
+$ScriptVersion = "v5.2.3"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
@@ -196,7 +196,7 @@ function Test-Paths {
                 }
             }
             Write-Host "$(Get-Date): All drives checked on $env:computername, proceeding to exit script..."
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds 5
         }
         catch {
             Throw "Could not map drives: $($_.Exception.Message)"
@@ -212,7 +212,7 @@ if (-Not (Test-Path -Path "C:\Logs")) {
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
 }
 if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
-    Write-Host "$(Get-Date): Creating new log folder."
+    Write-Host "$(Get-Date): Creating new Egnyte log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
 #Begins the logging process to capture all output
