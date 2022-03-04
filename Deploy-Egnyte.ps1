@@ -26,7 +26,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.3"
+$ScriptVersion = "v5.2.5"
 #Script name
 $App = "Egnyte Desktop App"
 #Application installation path
@@ -124,9 +124,10 @@ function Install-Egnyte {
     Inputs the file path to the Egnyte drive mapping script for the client.
     #>
     $Download = Get-EgnyteUrl
+    $Download = $Download.URL.ToString()
     $outpath = "C:\Deploy\Egnyte\EgnyteDesktopApp.msi"
     Write-Host "$(Get-Date): Downloading files to $outpath..."
-    $job = Measure-Command { (New-Object System.Net.WebClient).DownloadFile($Download.URL, $outpath) }
+    $job = Measure-Command { (New-Object System.Net.WebClient).DownloadFile($Download, $outpath) }
     $jobtime = $job.TotalSeconds
     $timerounded = [math]::Round($jobtime)
     if (Test-Path $outpath) {
@@ -134,7 +135,6 @@ function Install-Egnyte {
     }
     else {
         Write-Host "$(Get-Date): Download failed, please check your connection and try again..." -ForegroundColor Red
-        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
     Write-Host "$(Get-Date): Updating firewall rules for $app..."
@@ -167,11 +167,9 @@ function Install-Egnyte {
     Start-Sleep -Seconds 5
     if (Test-Path $default) {
         Write-Host "$(Get-Date): $app installed successfully on $env:computername! Proceeding to map drives..." -ForegroundColor Green
-        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
     }
     else {
         Write-Host "$(Get-Date): $app failed to install on $env:computername. Please try again. Cleaning up downloaded files..." -ForegroundColor Red
-        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
 }
@@ -183,9 +181,10 @@ function Update-Egnyte {
     Uninstalls the previous version of Egnyte before installing the new version to ensure the new version installs successfully.
     #>
     $Download = Get-EgnyteUrl
+    $Download = $Download.URL.ToString()
     $outpath = "C:\Deploy\Egnyte\EgnyteDesktopApp.msi"
     Write-Host "$(Get-Date): Downloading files to $outpath..."
-    $job = Measure-Command { (New-Object System.Net.WebClient).DownloadFile($Download.URL, $outpath) }
+    $job = Measure-Command { (New-Object System.Net.WebClient).DownloadFile($Download, $outpath) }
     $jobtime = $job.TotalSeconds
     $timerounded = [math]::Round($jobtime)
     if (Test-Path $outpath) {
@@ -193,7 +192,6 @@ function Update-Egnyte {
     }
     else {
         Write-Host "$(Get-Date): Download failed, please check your connection and try again..." -ForegroundColor Red
-        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
     $arguments2 = '/x C:\Deploy\Egnyte\EgnyteDesktopApp.msi /passive'
@@ -208,11 +206,9 @@ function Update-Egnyte {
     Start-Sleep -Seconds 5
     if ($registry.'setup.msi.version.product' -eq $Download.version) {
         Write-Host "$(Get-Date): $app installed successfully on $env:computername! Proceeding to map drives..." -ForegroundColor Green
-        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
     }
     else {
         Write-Host "$(Get-Date): $app failed to install on $env:computername. Please try again. Cleaning up downloaded files..." -ForegroundColor Red
-        Remove-Item "C:\Deploy\Egnyte" -Force -Recurse
         exit
     }
 }
