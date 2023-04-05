@@ -25,7 +25,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.5"
+$ScriptVersion = "v5.2.8"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
@@ -142,6 +142,37 @@ function Remove-Drives {
         }
     }
 }
+function Mount-Personal {
+    <#
+    .Synopsis
+    Map and connect personal drives.
+    #>
+    process {
+        try {
+            Write-Host "$(Get-Date): Mapping Private to P" -ForegroundColor Green
+            $User = $env:USERNAME
+            $arguments = @(
+                "-command add"
+                "-l ""Private"""
+                "-d ""contoso"""
+                "-sso use_sso"
+                "-t ""P"""
+                "-m ""/Private/$($User)"""
+            )
+            $process = Start-Process -PassThru -FilePath $default -ArgumentList $arguments
+            $process.WaitForExit()
+            $connect = @(
+                "-command connect"
+                "-l ""Private"""
+            )
+            $process = Start-Process -PassThru -FilePath $default -ArgumentList $connect
+            $process.WaitForExit()
+        }
+        catch {
+            Throw "Unable to map or connect drives: $($_.Exception.Message)"
+        }
+    }
+}
 function Test-Paths {
     <#
     .Synopsis
@@ -218,6 +249,15 @@ Start-Egnyte
 $Drives = Import-Csv -Path $File
 #Tests the paths to see if they are already mapped or not and maps them if needed
 Test-Paths -DriveList $Drives
+#Maps the personal drive
+$Personal = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq "P" }  
+if (!$Personal) {
+    Write-Host "$(Get-Date): Personal not found, proceeding to map drive..."
+    Mount-Personal
+}
+else {
+    Write-Host "$(Get-Date): Personal is already mapped..."
+}
 #Ends the logging process
 Stop-Transcript
 #Terminates the script
