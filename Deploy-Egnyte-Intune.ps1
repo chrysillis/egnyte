@@ -7,7 +7,7 @@
     After installing the Egnyte client, it then creates a scheduled task to launch another script to handle mapping the drives.
 
 .Example
-    .\Deploy-Egnyte.ps1
+    .\Deploy-Egnyte-Intune.ps1
 
 .Outputs
     Log files stored in C:\Logs\Egnyte.
@@ -24,13 +24,15 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.9"
+$ScriptVersion = "v5.3.0"
 #Application name
 $Application = "Egnyte Desktop App"
 #Application installation path
 $DefaultPath = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
-#Location of the mapping script
-$MountingScriptPath = "C:\Deploy\Egnyte\Mount-Egnyte-AD.ps1"
+#Remote path of the mapping script
+$RemoteScriptPath = "https://domain.blob.core.windows.net/scripts/Mount-Egnyte-Intune.ps1"
+#Local path of the mapping script
+$LocalScriptPath = "C:\Deploy\Egnyte\Mount-Egnyte-Intune.ps1"
 #Today's date
 $TodaysDate = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination to store logs
@@ -38,6 +40,40 @@ $LogFilePath = "C:\Logs\Egnyte\" + $TodaysDate + "-Install-Logs.log"
 
 #-----------------------------------------------------------[Functions]------------------------------------------------------------
 
+function Get-Files {
+    <#
+    .Synopsis
+    Downloads deployment files.
+    .Description
+    Downloads the files from the internet.
+    .Parameter URL
+    Determines which file to download.
+    #>
+    [Cmdletbinding(DefaultParameterSetName = "URL")]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "URL")]
+        [ValidateNotNullOrEmpty()]    
+        [String]
+        $URL
+    )
+    process {
+        try {
+            Write-Host "$(Get-Date): Downloading $URL to $LocalScriptPath..."
+            $job = Measure-Command { Start-BitsTransfer -Source $URL -Destination $LocalScriptPath -DisplayName "Scripts" }
+            $JobTime = $Job.TotalSeconds
+            if (Test-Path $LocalScriptPath) {
+                Write-Host "$(Get-Date): $App downloaded successfully in $JobTime seconds..."		
+            }
+            else {
+                Write-Host "$(Get-Date): Download failed, please check your connection and try again..." -ForegroundColor Red
+                exit
+            }
+        }
+        catch {
+            Throw "Unable to download files: $($_.Exception.Message)"
+        }
+    }
+}
 function New-PSTask {
     <#
     .Synopsis
@@ -153,8 +189,10 @@ Write-Host "$(Get-Date): Successfully started $Application $ScriptVersion on $en
 Write-Host "$(Get-Date): Checking to see if $Application is already installed..."
 if (Test-Path $DefaultPath) {
     Write-Host "$(Get-Date): $Application is already installed..."
-    New-PSTask -Path $MountingScriptPath
+    Get-Files -URL $RemoteScriptPath
+    New-PSTask -Path $LocalScriptPath
 }
 Write-Host "$(Get-Date): $Application was not found, installing now..."
 Install-Egnyte
-New-PSTask -Path $MountingScriptPath
+Get-Files -URL $RemoteScriptPath
+New-PSTask -Path $LocalScriptPath
