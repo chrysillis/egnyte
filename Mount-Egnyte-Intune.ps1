@@ -25,13 +25,13 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.2.1"
+$ScriptVersion = "v5.3.0"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 #Location of the mappings
-$File = "https://contoso.blob.core.windows.net/egnyte/client-drives.csv"
+$File = "https://contoso.blob.core.windows.net/scripts/Client-Drives-Intune.csv"
 #Today's date
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination to store logs
