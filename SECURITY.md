@@ -1,0 +1,15 @@
+# Security Policy
+
+## Supported Versions
+
+Use this section to tell people about which versions of your project are
+currently being supported with security updates.
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 5.3.0   | :white_check_mark: |
+| > 5.2.9 | :x:                |
+
+## Reporting a Vulnerability
+
+Submit an issue if you find a vulnerability and it will be looked into.
