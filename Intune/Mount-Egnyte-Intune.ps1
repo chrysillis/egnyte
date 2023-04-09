@@ -14,8 +14,7 @@
 
 .Notes
     Author: Chrysi
-    Link:   https://github.com/DarkSylph/egnyte
-    Date:   01/18/2022
+    Link:   https://github.com/chrysillis/egnyte
 #>
 
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
@@ -25,13 +24,17 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.3.0"
+$ScriptVersion = "v5.3.1"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
-#Location of the mappings
-$File = "https://contoso.blob.core.windows.net/scripts/Client-Drives-Intune.csv"
+#Remote location of the mappings
+$RemoteFile = "https://contoso.blob.core.windows.net/scripts/Client-Drives-Intune.csv"
+#Local location of the mappings
+$LocalFile = "C:\Deploy\Egnyte\Client-Drives-Intune.csv"
+#Egnyte tenant name
+$Tenant = "contoso"
 #Today's date
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination to store logs
@@ -54,18 +57,17 @@ function Start-Egnyte {
     try {
         $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
         $egnytedrive = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnytedrive.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
-        $egnytesync = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnytesyncservice.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
-        if (!$egnyteclient -or !$egnytedrive -or !$egnytesync) {
-            Write-Host "$(Get-Date): Starting $app before mapping drives..."
+        if (!$egnyteclient -or !$egnytedrive) {
+            Write-Host "$(Get-Date): Starting Egnyte before mapping drives..."
             Start-Process -PassThru -FilePath $default -ArgumentList $arguments | Out-Null
             Start-Sleep -Seconds 8
             $egnyteclient = Get-WmiObject -Class Win32_Process -Filter "Name = 'egnyteclient.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.GetOwner().User -eq $env:USERNAME }
             if ($egnyteclient) {
-                Write-Host "$(Get-Date): $app has successfully started up!"
+                Write-Host "$(Get-Date): Egnyte has successfully started up!"
             }
         }
         else {
-            Write-Host "$(Get-Date): $app is already running, proceeding to map drives."
+            Write-Host "$(Get-Date): Egnyte is already running, proceeding to map drives."
         }
     }
     catch {
@@ -78,6 +80,105 @@ function Start-Egnyte {
         }
         else {
             Write-Host "$(Get-Date): Status of $app is unknown, proceeding with rest of script..."
+        }
+    }
+}
+function Mount-Drives {
+    <#
+    .Synopsis
+    Map and connect each drive in the array.
+    .Parameter DriveList
+    Accepts an array of drives and then feeds them into Egnyte to be mounted.
+    #>
+    [CmdletBinding(DefaultParameterSetName = "DriveList")]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "DriveList")]
+        [ValidateNotNullOrEmpty()]
+        [PSCustomObject[]]
+        $Drive
+    )
+    process {
+        try {
+            Write-Host "$(Get-Date): Mapping $($Drive.DriveName) to $($Drive.DriveLetter)" -ForegroundColor Green
+            $arguments = @(
+                "-command add"
+                "-l ""$($Drive.DriveName)"""
+                "-d ""$($Drive.DomainName)"""
+                "-sso use_sso"
+                "-t ""$($Drive.DriveLetter)"""
+                "-m ""$($Drive.DrivePath)"""
+            )
+            $process = Start-Process -PassThru -FilePath $default -ArgumentList $arguments
+            $process.WaitForExit()
+            $connect = @(
+                "-command connect"
+                "-l ""$($Drive.DriveName)"""
+            )
+            $process = Start-Process -PassThru -FilePath $default -ArgumentList $connect
+            $process.WaitForExit()
+        }
+        catch {
+            Throw "Unable to map or connect drives: $($_.Exception.Message)"
+        }
+    }
+}
+function Remove-Drives {
+    <#
+    .Synopsis
+    Removes drives that are not authorized.
+    .Parameter DriveList
+    Accepts an array of drives and then feeds them into Egnyte to be removed.
+    #>
+    [CmdletBinding(DefaultParameterSetName = "DriveList")]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "DriveList")]
+        [ValidateNotNullOrEmpty()]
+        [PSCustomObject[]]
+        $Drive
+    )
+    process {
+        try {
+            Write-Host "$(Get-Date): Not authorized, removing $($Drive.DriveName) drive." -ForegroundColor Magenta
+            $arguments = @(
+                "-command remove"
+                "-l ""$($Drive.DriveName)"""
+            )
+            $process = Start-Process -PassThru -FilePath $default -ArgumentList $arguments
+            $process.WaitForExit()
+        }
+        catch {
+            Throw "Unable to remove drives: $($_.Exception.Message)"
+        }
+    }
+}
+function Mount-Personal {
+    <#
+    .Synopsis
+    Map and connect personal drives.
+    #>
+    process {
+        try {
+            Write-Host "$(Get-Date): Mapping Private to P" -ForegroundColor Green
+            $User = $env:USERNAME
+            $arguments = @(
+                "-command add"
+                "-l ""Private"""
+                "-d ""$Tenant"""
+                "-sso use_sso"
+                "-t ""P"""
+                "-m ""/Private/$($User)"""
+            )
+            $process = Start-Process -PassThru -FilePath $default -ArgumentList $arguments
+            $process.WaitForExit()
+            $connect = @(
+                "-command connect"
+                "-l ""Private"""
+            )
+            $process = Start-Process -PassThru -FilePath $default -ArgumentList $connect
+            $process.WaitForExit()
+        }
+        catch {
+            Throw "Unable to map or connect private drive: $($_.Exception.Message)"
         }
     }
 }
@@ -168,47 +269,6 @@ function Get-Groups {
     $GroupMemberRequest = Invoke-RestMethod -Uri $Uri -Headers $Header -Method 'Post' -Body $Payload
     $GroupMemberRequest.Value
 }
-function Mount-Drives {
-    <#
-    .Synopsis
-    Map and connect each drive in the array.
-    .Parameter DriveList
-    Accepts an array of drives and then feeds them into Egnyte to be mounted.
-    #>
-    [CmdletBinding(DefaultParameterSetName = "DriveList")]
-    param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = "DriveList")]
-        [ValidateNotNullOrEmpty()]
-        [PSCustomObject[]]
-        $DriveList
-    )
-    process {
-        try {
-            foreach ($Drive in $DriveList) {
-                Write-Host "$(Get-Date): Mapping $($Drive.DriveName) to $($Drive.DriveLetter)" -ForegroundColor Green
-                $arguments = @(
-                    "-command add"
-                    "-l ""$($Drive.DriveName)"""
-                    "-d ""$($Drive.DomainName)"""
-                    "-sso use_sso"
-                    "-t ""$($Drive.DriveLetter)"""
-                    "-m ""$($Drive.DrivePath)"""
-                )
-                $process = Start-Process -PassThru -FilePath $default -ArgumentList $arguments
-                $process.WaitForExit()
-                $connect = @(
-                    "-command connect"
-                    "-l ""$($Drive.DriveName)"""
-                )
-                $process = Start-Process -PassThru -FilePath $default -ArgumentList $connect
-                $process.WaitForExit()
-            }
-        }
-        catch {
-            Throw "Unable to map or connect drives: $($_.Exception.Message)"
-        }
-    }
-}
 function Test-Paths {
     <#
     .Synopsis
@@ -231,46 +291,45 @@ function Test-Paths {
             Write-Host "$(Get-Date): Checking to see if the paths are already mapped..."
             $GroupMember = Get-Groups
             foreach ($Drive in $DriveList) {
-                $CheckMembers = $GroupMember -contains $Drive.GroupID
-                $DiscDrives = Get-CimInstance -Class Win32_NetworkConnection | Where-Object { $_.ConnectionState -eq "Disconnected" }
-                if ((Test-Path -Path "$($Drive.DriveLetter):") -Or ($DiscDrives)) {
-                    $Root = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq $Drive.DriveLetter }  
+                $DriveLetter = "$($Drive.DriveLetter)" + ":"
+                $PathTest = Test-Path -Path $DriveLetter
+                if ($GroupMember -contains $Drive.GroupID) {
+                    if (!$PathTest) {
+                    Write-Host "$(Get-Date): $($Drive.DriveName) not found. Mapping now."
+                    Mount-Drives -Drive $Drive
+                }
+                elseif ($PathTest) {
+                    Write-Host "$(Get-Date): $($Drive.DriveName) was found."
+                    $Root = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq $Drive.DriveLetter }
                     if (!$Root) {
                         Write-host "$(Get-Date): $($Drive.DriveName) is not mapped to the cloud. Unmapping now."
-                        $NetDrive = $($Drive.DriveLetter) + ":"
-                        net use $NetDrive /delete
-                        Mount-Drives -DriveList $Drive
+                        net use $DriveLetter /delete
+                        Mount-Drives -Drive $Drive
                     }
-                    else {
-                        Write-Host "$(Get-Date): $($Drive.DriveName) is already mapped..."
-                    }
-                }
-                elseif ($CheckMembers) {
-                    Write-Host "$(Get-Date): $($Drive.DriveName) not found, proceeding to map drive..."
-                    Mount-Drives -DriveList $Drive
-                }
-                else {
-                    Write-Host "$(Get-Date): Not authorized for this drive, moving to next drive..."    
                 }
             }
-            Write-Host "$(Get-Date): All drives checked on $env:computername, proceeding to exit script..."
-            Start-Sleep -Seconds 2
-        }
-        catch {
-            Throw "Could not map drives: $($_.Exception.Message)"
+            elseif ($GroupMember -notcontains $Drive.GroupID) {
+                if ($PathTest) {
+                    Remove-Drives -Drive $Drive
+                }
+            }
         }
     }
+    catch {
+        Throw "Could not map drives: $($_.Exception.Message)"
+    }
+}
 }
 
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
 #Sets up a destination for the logs
 if (-Not (Test-Path -Path "C:\Logs")) {
-    Write-Host -Message "Creating new log folder."
+    Write-Host "$(Get-Date): Creating new log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
 }
 if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
-    Write-Host -Message "Creating new log folder."
+    Write-Host "$(Get-Date): Creating new Egnyte log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
 }
 #Begins the logging process to capture all output
@@ -280,10 +339,19 @@ Write-Host "$(Get-Date): Checking if Egnyte is running before continuing..."
 #Starts Egnyte up if it isn't already running
 Start-Egnyte
 #Imports the mapping file into the script
-Get-Mappings -URL $File
-$Drives = Import-Csv -Path "C:\Deploy\client-drives.csv"
+$Drives = Import-Csv -Path $LocalFile
+Get-Mappings -URL $RemoteFile
 #Tests the paths to see if they are already mapped or not and maps them if needed
 Test-Paths -DriveList $Drives
+#Maps the personal drive
+$Personal = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq "P" }  
+if (!$Personal) {
+    Write-Host "$(Get-Date): Personal not found, proceeding to map drive..."
+    Mount-Personal
+}
+else {
+    Write-Host "$(Get-Date): Personal is already mapped..."
+}
 #Ends the logging process
 Stop-Transcript
 #Terminates the script

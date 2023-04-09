@@ -14,8 +14,7 @@
 
 .Notes
     Author: Chrysi
-    Link:   https://github.com/DarkSylph/egnyte
-    Date:   01/12/2022
+    Link:   https://github.com/chrysillis/egnyte
 #>
 
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
@@ -25,13 +24,15 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.3.0"
+$ScriptVersion = "v5.3.1"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 #Location of the mappings
-$File = "C:\Deploy\Egnyte\Client-Drives-AD.csv"
+$LocalFile = "C:\Deploy\Egnyte\Client-Drives-AD.csv"
+#Egnyte tenant name
+$Tenant = "contoso"
 #Today's date
 $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 #Destination to store logs
@@ -154,7 +155,7 @@ function Mount-Personal {
             $arguments = @(
                 "-command add"
                 "-l ""Private"""
-                "-d ""contoso"""
+                "-d ""$Tenant"""
                 "-sso use_sso"
                 "-t ""P"""
                 "-m ""/Private/$($User)"""
@@ -169,7 +170,7 @@ function Mount-Personal {
             $process.WaitForExit()
         }
         catch {
-            Throw "Unable to map or connect drives: $($_.Exception.Message)"
+            Throw "Unable to map or connect private drive: $($_.Exception.Message)"
         }
     }
 }
@@ -239,14 +240,11 @@ if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
 #Begins the logging process to capture all output
 Start-Transcript -Path $LogFilePath -Force
 Write-Host "$(Get-Date): Successfully started $App $ScriptVersion on $env:computername"
-if (Test-Path C:\Users\$env:USERNAME\Scripts\BCA-Login-Turbo.ps1 -ErrorAction SilentlyContinue) {
-    Remove-Item -Path C:\Users\$env:USERNAME\Scripts\BCA-Login-Turbo.ps1 -Force
-}
 Write-Host "$(Get-Date): Checking if Egnyte is running before continuing..."
 #Starts Egnyte up if it isn't already running
 Start-Egnyte
 #Imports the mapping file into the script
-$Drives = Import-Csv -Path $File
+$Drives = Import-Csv -Path $LocalFile
 #Tests the paths to see if they are already mapped or not and maps them if needed
 Test-Paths -DriveList $Drives
 #Maps the personal drive
