@@ -24,7 +24,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.3.0"
+$ScriptVersion = "v5.3.2"
 #Application name
 $Application = "Egnyte Desktop App"
 #Application installation path
@@ -125,6 +125,15 @@ function Install-Egnyte {
     $source = "https://egnyte-cdn.egnyte.com/egnytedrive/win/en-us/latest/EgnyteConnectWin.msi"
     $destination = "C:\Deploy\Egnyte\EgnyteDesktopApp.msi"
     Write-Host "$(Get-Date): Downloading files to $destination..."
+    #Sets up a destination for the files
+    if (-Not (Test-Path -Path "C:\Deploy")) {
+        Write-Host "$(Get-Date): Creating new deploy folder."
+        New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
+    }
+    if (-Not (Test-Path -Path "C:\Deploys\Egnyte")) {
+        Write-Host "$(Get-Date): Creating new Egnyte folder."
+        New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
+    }
     $job = Measure-Command { Start-BitsTransfer -Source $source -Destination $destination -DisplayName "Egnyte" }
     $jobtime = $job.TotalSeconds
     $timerounded = [math]::Round($jobtime)

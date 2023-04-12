@@ -24,13 +24,13 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.3.1"
+$ScriptVersion = "v5.3.2"
 #Script name
 $App = "Egnyte Drive Mapping"
 #Application installation path
 $Default = "C:\Program Files (x86)\Egnyte Connect\EgnyteClient.exe"
 #Remote location of the mappings
-$RemoteFile = "https://contoso.blob.core.windows.net/scripts/Client-Drives-Intune.csv"
+$RemoteFile = "https://contoso.blob.core.windows.net/storage/client-drives-intune.csv"
 #Local location of the mappings
 $LocalFile = "C:\Deploy\Egnyte\Client-Drives-Intune.csv"
 #Egnyte tenant name
@@ -41,7 +41,7 @@ $Date = Get-Date -Format "MM-dd-yyyy-HH-mm-ss"
 $LogFilePath = "C:\Logs\Egnyte\" + $Date + "" + "-" + $env:USERNAME + "-Mount-Logs.log"
 #Defines the data needed to connect to the Microsoft Graph API
 $AppID = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-$AppSecret = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+$AppSecret = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 $Scope = "https://graph.microsoft.com/.default"
 $TenantName = "contoso.onmicrosoft.com"
 $GraphURL = "https://login.microsoftonline.com/$TenantName/oauth2/v2.0/token"
@@ -201,12 +201,11 @@ function Get-Mappings {
                 Write-Host -Message "Creating new log folder."
                 New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
             }
-            $outpath = "C:\Deploy\client-drives.csv"
-            Write-Host "$(Get-Date): Downloading files to $outpath..."
-            $job = Measure-Command { (New-Object System.Net.WebClient).DownloadFile($URL, $outpath) }
+            Write-Host "$(Get-Date): Downloading files to $LocalFile..."
+            $job = Measure-Command { Start-BitsTransfer -Source $URL -Destination $LocalFile -DisplayName "Scripts" }
             $jobtime = $job.TotalSeconds
             $timerounded = [math]::Round($jobtime)
-            if (Test-Path $outpath) {
+            if (Test-Path $LocalFile) {
                 Write-Host "$(Get-Date): Files downloaded successfully in $timerounded seconds...."		
             }
             else {
@@ -299,7 +298,7 @@ function Test-Paths {
                     Mount-Drives -Drive $Drive
                 }
                 elseif ($PathTest) {
-                    Write-Host "$(Get-Date): $($Drive.DriveName) was found."
+                    Write-Host "$(Get-Date): $($Drive.DriveName) is already mapped."
                     $Root = Get-PSDrive | Where-Object { $_.DisplayRoot -match "EgnyteDrive" -and $_.Name -eq $Drive.DriveLetter }
                     if (!$Root) {
                         Write-host "$(Get-Date): $($Drive.DriveName) is not mapped to the cloud. Unmapping now."
@@ -339,8 +338,8 @@ Write-Host "$(Get-Date): Checking if Egnyte is running before continuing..."
 #Starts Egnyte up if it isn't already running
 Start-Egnyte
 #Imports the mapping file into the script
-$Drives = Import-Csv -Path $LocalFile
 Get-Mappings -URL $RemoteFile
+$Drives = Import-Csv -Path $LocalFile
 #Tests the paths to see if they are already mapped or not and maps them if needed
 Test-Paths -DriveList $Drives
 #Maps the personal drive
