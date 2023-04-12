@@ -24,7 +24,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.3.2"
+$ScriptVersion = "v5.3.3"
 #Application name
 $Application = "Egnyte Desktop App"
 #Application installation path
@@ -62,7 +62,7 @@ function Get-Files {
             $job = Measure-Command { Start-BitsTransfer -Source $URL -Destination $LocalScriptPath -DisplayName "Scripts" }
             $JobTime = $Job.TotalSeconds
             if (Test-Path $LocalScriptPath) {
-                Write-Host "$(Get-Date): $App downloaded successfully in $JobTime seconds..."		
+                Write-Host "$(Get-Date): $Application downloaded successfully in $JobTime seconds..."		
             }
             else {
                 Write-Host "$(Get-Date): Download failed, please check your connection and try again..." -ForegroundColor Red
@@ -127,12 +127,12 @@ function Install-Egnyte {
     Write-Host "$(Get-Date): Downloading files to $destination..."
     #Sets up a destination for the files
     if (-Not (Test-Path -Path "C:\Deploy")) {
-        Write-Host "$(Get-Date): Creating new deploy folder."
-        New-Item -ItemType Directory -Force -Path C:\Logs | Out-Null
+        Write-Host "$(Get-Date): Creating new Deploy folder."
+        New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
     }
     if (-Not (Test-Path -Path "C:\Deploys\Egnyte")) {
         Write-Host "$(Get-Date): Creating new Egnyte folder."
-        New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
+        New-Item -ItemType Directory -Force -Path C:\Deploy\Egnyte | Out-Null
     }
     $job = Measure-Command { Start-BitsTransfer -Source $source -Destination $destination -DisplayName "Egnyte" }
     $jobtime = $job.TotalSeconds
