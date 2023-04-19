@@ -24,7 +24,7 @@
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script version
-$ScriptVersion = "v5.3.3"
+$ScriptVersion = "v5.3.4"
 #Application name
 $Application = "Egnyte Desktop App"
 #Application installation path
@@ -125,15 +125,6 @@ function Install-Egnyte {
     $source = "https://egnyte-cdn.egnyte.com/egnytedrive/win/en-us/latest/EgnyteConnectWin.msi"
     $destination = "C:\Deploy\Egnyte\EgnyteDesktopApp.msi"
     Write-Host "$(Get-Date): Downloading files to $destination..."
-    #Sets up a destination for the files
-    if (-Not (Test-Path -Path "C:\Deploy")) {
-        Write-Host "$(Get-Date): Creating new Deploy folder."
-        New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
-    }
-    if (-Not (Test-Path -Path "C:\Deploys\Egnyte")) {
-        Write-Host "$(Get-Date): Creating new Egnyte folder."
-        New-Item -ItemType Directory -Force -Path C:\Deploy\Egnyte | Out-Null
-    }
     $job = Measure-Command { Start-BitsTransfer -Source $source -Destination $destination -DisplayName "Egnyte" }
     $jobtime = $job.TotalSeconds
     $timerounded = [math]::Round($jobtime)
@@ -191,6 +182,15 @@ if (-Not (Test-Path -Path "C:\Logs")) {
 if (-Not (Test-Path -Path "C:\Logs\Egnyte")) {
     Write-Host "$(Get-Date): Creating new Egnyte log folder."
     New-Item -ItemType Directory -Force -Path C:\Logs\Egnyte | Out-Null
+}
+#Sets up a destination for the files
+if (-Not (Test-Path -Path "C:\Deploy")) {
+    Write-Host "$(Get-Date): Creating new Deploy folder."
+    New-Item -ItemType Directory -Force -Path C:\Deploy | Out-Null
+}
+if (-Not (Test-Path -Path "C:\Deploys\Egnyte")) {
+    Write-Host "$(Get-Date): Creating new Egnyte folder."
+    New-Item -ItemType Directory -Force -Path C:\Deploy\Egnyte | Out-Null
 }
 #Begins the logging process to capture all output
 Start-Transcript -Path $LogFilePath -Force
